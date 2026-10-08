@@ -59,7 +59,8 @@ private:
         float w = i.x * m.m[0][3] + i.y * m.m[1][3] + i.z * m.m[2][3] + m.m[3][3]; // I am impling that the 4th element  of the input vector is 1
 
         //now because we have 4d and we need to get back to 3d space we divide it by w
-        if (w != 0.0f) {
+        if (w != 0.0f) 
+        {
             o.x /= w;
             o.y /= w;
             o.z /= w;
@@ -112,7 +113,7 @@ public:
         float fFov = 90.0f;
         // grabed directly form the console
         float fAspectRatio = (float)ScreenHeight() / (float)ScreenWidth();
-        float fFovRad = 1.0f / tanf(fFov *  0.5f/ 180.0f * 3.14159f);//converted degress to radian
+        float fFovRad = 1.0f / tanf(fFov *  0.5f / 180.0f * 3.14159f);//converted degress to radian
 
         matProj.m[0][0] = fAspectRatio * fFovRad;
         matProj.m[1][1] = fFovRad;
@@ -120,7 +121,6 @@ public:
         matProj.m[3][2] = (-fFar * fNear) / (fFar - fNear);
         matProj.m[2][3] = 1.0f;
         matProj.m[3][3] = 0.0f;
-
 
         return true;
     }
@@ -176,50 +176,76 @@ public:
             triangle triprojected, triTranslated, triRotatedZ, triRotatedZX; // were we store the result of out matrix multiplication so as to not upset the original triangle
 
             //Rotation
-
-            MultiplyMatrixVector(tri.p[0], triRotatedZ.p[0], matRotZ);// rotate the original triangle in the z axis
+            // rotate the original triangle in the z axis
+            MultiplyMatrixVector(tri.p[0], triRotatedZ.p[0], matRotZ);
             MultiplyMatrixVector(tri.p[1], triRotatedZ.p[1], matRotZ);
             MultiplyMatrixVector(tri.p[2], triRotatedZ.p[2], matRotZ);
 
-
-            MultiplyMatrixVector(triRotatedZ.p[0], triRotatedZX.p[0], matRotX);// rotate the original triangle in the x axis
+            // rotate the original triangle in the x axis
+            MultiplyMatrixVector(triRotatedZ.p[0], triRotatedZX.p[0], matRotX);
             MultiplyMatrixVector(triRotatedZ.p[1], triRotatedZX.p[1], matRotX);
             MultiplyMatrixVector(triRotatedZ.p[2], triRotatedZX.p[2], matRotX);
 
 
-            //offset
+            // Offset into the screen
             triTranslated = triRotatedZX;
             triTranslated.p[0].z = triRotatedZX.p[0].z + 3.0f;
             triTranslated.p[1].z = triRotatedZX.p[1].z + 3.0f;
             triTranslated.p[2].z = triRotatedZX.p[2].z + 3.0f;
 
+            // Calculate the tringles normal
+            // after translate the triangle into world space but before projrction so we are still in 3d space
+            vec3d normal, line1, line2;
+            line1.x = triTranslated.p[1].x - triTranslated.p[0].x;
+            line1.y = triTranslated.p[1].y - triTranslated.p[0].y;
+            line1.z = triTranslated.p[1].z - triTranslated.p[0].z;
 
-            MultiplyMatrixVector(triTranslated.p[0], triprojected.p[0], matProj);// we can use the triangle directly and need to refrence the vertex inside
-            MultiplyMatrixVector(triTranslated.p[1], triprojected.p[1], matProj);
-            MultiplyMatrixVector(triTranslated.p[2], triprojected.p[2], matProj);
+            line2.x = triTranslated.p[2].x - triTranslated.p[0].x;
+            line2.y = triTranslated.p[2].y - triTranslated.p[0].y;
+            line2.z = triTranslated.p[2].z - triTranslated.p[0].z;
 
-            //scale into view
-            triprojected.p[0].x += 1.0f;
-            triprojected.p[0].y += 1.0f;
-            triprojected.p[1].x += 1.0f;
-            triprojected.p[1].y += 1.0f;
-            triprojected.p[2].x += 1.0f;
-            triprojected.p[2].y += 1.0f;
+            // normal cross product of the 2 lines
+            normal.x = line1.y * line2.z - line1.z * line2.y;
+            normal.y = line1.z * line2.x - line1.x * line2.z;
+            normal.z = line1.x * line2.y - line1.y * line2.x;
+            
+            //normilize the normal (make the normal a unit vector)
+            float l = sqrtf(normal.x*normal.x + normal.y * normal.y + normal.z * normal.z);
+            normal.x /= l; normal.y /= l; normal.z /= l;
 
-            triprojected.p[0].x *= 0.5f * (float)ScreenWidth();
-            triprojected.p[0].y *= 0.5f * (float)ScreenHeight();
-            triprojected.p[1].x *= 0.5f * (float)ScreenWidth();
-            triprojected.p[1].y *= 0.5f * (float)ScreenHeight();
-            triprojected.p[2].x *= 0.5f * (float)ScreenWidth();
-            triprojected.p[2].y *= 0.5f * (float)ScreenHeight();
-       
+            // only draw and scale if we can see the triangle
+            if (normal.z < 0) {            // Proejct triangles from 3D ---> 2D
+                MultiplyMatrixVector(triTranslated.p[0], triprojected.p[0], matProj);// we can use the triangle directly and need to refrence the vertex inside
+                MultiplyMatrixVector(triTranslated.p[1], triprojected.p[1], matProj);
+                MultiplyMatrixVector(triTranslated.p[2], triprojected.p[2], matProj);
 
-            DrawTriangle(triprojected.p[0].x, triprojected.p[0].y, 
-                triprojected.p[1].x, triprojected.p[1].y, 
-                triprojected.p[2].x, triprojected.p[2].y,
-                PIXEL_SOLID, FG_WHITE);
-        };
+                //scale into view
+                triprojected.p[0].x += 1.0f;
+                triprojected.p[0].y += 1.0f;
 
+                triprojected.p[1].x += 1.0f;
+                triprojected.p[1].y += 1.0f;
+
+                triprojected.p[2].x += 1.0f;
+                triprojected.p[2].y += 1.0f;
+
+                // changedd 0.5f to 0.25f discovered through trail and error 
+                triprojected.p[0].x *= 0.25f * (float)ScreenWidth();
+                triprojected.p[0].y *= 0.25f * (float)ScreenHeight();
+
+                triprojected.p[1].x *= 0.25f * (float)ScreenWidth();
+                triprojected.p[1].y *= 0.25f * (float)ScreenHeight();
+
+                triprojected.p[2].x *= 0.25f * (float)ScreenWidth();
+                triprojected.p[2].y *= 0.25f * (float)ScreenHeight();
+
+
+                DrawTriangle(triprojected.p[0].x, triprojected.p[0].y,
+                    triprojected.p[1].x, triprojected.p[1].y,
+                    triprojected.p[2].x, triprojected.p[2].y,
+                    PIXEL_SOLID, FG_WHITE);
+            }
+        }
 
         return true;
     }
@@ -231,7 +257,8 @@ int main()
     olcEngine3D demo;
     // instance of the console
     //if (demo.ConstructConsole(256, 240, 4, 4))
-    if (demo.ConstructConsole(64, 60, 4, 4))
+    if (demo.ConstructConsole(128, 120, 4, 4))
+    //if (demo.ConstructConsole(64, 60, 4, 4))
         //if we cn successful construct the console start it 
         demo.Start();
 
