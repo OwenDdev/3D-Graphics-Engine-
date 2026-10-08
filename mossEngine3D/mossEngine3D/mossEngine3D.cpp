@@ -46,6 +46,9 @@ private:
     // lets create a projection matrix
     mat4x4 matProj;
 
+    // vector respresenting camera postion in 3d space
+    vec3d vCamera;
+
     float fTheta = 0.0f;
 
 
@@ -214,7 +217,12 @@ public:
             normal.x /= l; normal.y /= l; normal.z /= l;
 
             // only draw and scale if we can see the triangle
-            if (normal.z < 0) {            // Proejct triangles from 3D ---> 2D
+            //if (normal.z < 0) {      
+            if (normal.x * (triTranslated.p[0].x - vCamera.x) +
+                normal.y * (triTranslated.p[0].y - vCamera.y) +
+                normal.z * (triTranslated.p[0].z - vCamera.z) < 0.0f)
+            {
+                // Proejct triangles from 3D ---> 2D
                 MultiplyMatrixVector(triTranslated.p[0], triprojected.p[0], matProj);// we can use the triangle directly and need to refrence the vertex inside
                 MultiplyMatrixVector(triTranslated.p[1], triprojected.p[1], matProj);
                 MultiplyMatrixVector(triTranslated.p[2], triprojected.p[2], matProj);
