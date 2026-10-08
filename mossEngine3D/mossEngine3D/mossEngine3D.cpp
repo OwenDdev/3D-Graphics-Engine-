@@ -15,6 +15,10 @@ struct vec3d
 struct triangle
 {
     vec3d p[3];
+
+    // store the symbols that represent the color for the triangle
+    wchar_t sym;
+    short col;
 };
 
 // represents the object groups togther triangles
@@ -70,6 +74,40 @@ private:
         }
     }
 
+    // Taken From Command Line Webcam Video
+    CHAR_INFO GetColour(float lum)
+    {
+        short bg_col, fg_col;
+        wchar_t sym;
+        int pixel_bw = (int)(13.0f * lum);
+        switch (pixel_bw)
+        {
+        case 0: bg_col = BG_BLACK; fg_col = FG_BLACK; sym = PIXEL_SOLID; break;
+
+        case 1: bg_col = BG_BLACK; fg_col = FG_DARK_GREY; sym = PIXEL_QUARTER; break;
+        case 2: bg_col = BG_BLACK; fg_col = FG_DARK_GREY; sym = PIXEL_HALF; break;
+        case 3: bg_col = BG_BLACK; fg_col = FG_DARK_GREY; sym = PIXEL_THREEQUARTERS; break;
+        case 4: bg_col = BG_BLACK; fg_col = FG_DARK_GREY; sym = PIXEL_SOLID; break;
+
+        case 5: bg_col = BG_DARK_GREY; fg_col = FG_GREY; sym = PIXEL_QUARTER; break;
+        case 6: bg_col = BG_DARK_GREY; fg_col = FG_GREY; sym = PIXEL_HALF; break;
+        case 7: bg_col = BG_DARK_GREY; fg_col = FG_GREY; sym = PIXEL_THREEQUARTERS; break;
+        case 8: bg_col = BG_DARK_GREY; fg_col = FG_GREY; sym = PIXEL_SOLID; break;
+
+        case 9:  bg_col = BG_GREY; fg_col = FG_WHITE; sym = PIXEL_QUARTER; break;
+        case 10: bg_col = BG_GREY; fg_col = FG_WHITE; sym = PIXEL_HALF; break;
+        case 11: bg_col = BG_GREY; fg_col = FG_WHITE; sym = PIXEL_THREEQUARTERS; break;
+        case 12: bg_col = BG_GREY; fg_col = FG_WHITE; sym = PIXEL_SOLID; break;
+        default:
+            bg_col = BG_BLACK; fg_col = FG_BLACK; sym = PIXEL_SOLID;
+        }
+
+        CHAR_INFO c;
+        c.Attributes = bg_col | fg_col;
+        c.Char.UnicodeChar = sym;
+        return c;
+    }
+
 // overriding 2 function
 public:
     bool OnUserCreate() override 
@@ -85,7 +123,7 @@ public:
             {0.0f, 0.0f, 0.0f,            0.0f, 1.0f, 0.0f,            1.0f, 1.0f, 0.0f,},
             {0.0f, 0.0f, 0.0f,            1.0f, 1.0f, 0.0f,            1.0f, 0.0f, 0.0f,},
 
-            //East
+            // East
             {1.0f, 0.0f, 0.0f,            1.0f, 1.0f, 0.0f,            1.0f, 1.0f, 1.0f,},
             {1.0f, 0.0f, 0.0f,            1.0f, 1.0f, 1.0f,            1.0f, 0.0f, 1.0f,},
 
@@ -212,7 +250,7 @@ public:
             normal.y = line1.z * line2.x - line1.x * line2.z;
             normal.z = line1.x * line2.y - line1.y * line2.x;
             
-            //normilize the normal (make the normal a unit vector)
+            // normilize the normal (make the normal a unit vector)
             float l = sqrtf(normal.x*normal.x + normal.y * normal.y + normal.z * normal.z);
             normal.x /= l; normal.y /= l; normal.z /= l;
 
@@ -222,10 +260,29 @@ public:
                 normal.y * (triTranslated.p[0].y - vCamera.y) +
                 normal.z * (triTranslated.p[0].z - vCamera.z) < 0.0f)
             {
+                // Illumintion (Basic lighting)
+                vec3d light_direction = { 0.0f, 0.0f, -1.0f };
+                // a triangle is more light the normal that its normal is alligned with the light direction
+                //normilize the light direction (make the light direction a unit vector)
+                float l = sqrtf(light_direction.x * light_direction.x + light_direction.y * light_direction.y + light_direction.z * light_direction.z);
+                light_direction.x /= l; light_direction.y /= l; light_direction.z /= l;
+
+                // calculate the dot product of the light direction and normal
+                float dp = normal.x * light_direction.x + normal.y * light_direction.y + normal.z * light_direction.z;
+
+                // console specific 
+                CHAR_INFO c = GetColour(dp);
+                triTranslated.col = c.Attributes;
+                triTranslated.sym = c.Char.UnicodeChar;
+
+
                 // Proejct triangles from 3D ---> 2D
                 MultiplyMatrixVector(triTranslated.p[0], triprojected.p[0], matProj);// we can use the triangle directly and need to refrence the vertex inside
                 MultiplyMatrixVector(triTranslated.p[1], triprojected.p[1], matProj);
                 MultiplyMatrixVector(triTranslated.p[2], triprojected.p[2], matProj);
+                triprojected.col = triTranslated.col;
+                triprojected.sym = triTranslated.sym;
+
 
                 //scale into view
                 triprojected.p[0].x += 1.0f;
@@ -248,10 +305,17 @@ public:
                 triprojected.p[2].y *= 0.25f * (float)ScreenHeight();
 
 
-                DrawTriangle(triprojected.p[0].x, triprojected.p[0].y,
+
+                FillTriangle(triprojected.p[0].x, triprojected.p[0].y,
                     triprojected.p[1].x, triprojected.p[1].y,
                     triprojected.p[2].x, triprojected.p[2].y,
-                    PIXEL_SOLID, FG_WHITE);
+                    triprojected.sym, triprojected.col);
+
+
+                //DrawTriangle(triprojected.p[0].x, triprojected.p[0].y,
+                //    triprojected.p[1].x, triprojected.p[1].y,
+                //    triprojected.p[2].x, triprojected.p[2].y,
+                //    PIXEL_SOLID, FG_BLACK);
             }
         }
 
