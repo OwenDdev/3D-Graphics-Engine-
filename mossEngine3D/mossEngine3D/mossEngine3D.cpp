@@ -98,6 +98,9 @@ private:
     // vector respresenting camera postion in 3d space
     vec3d vCamera;
     //vec3d vCamera = { 0.0f, 0.0f, 0.0f };
+    vec3d vLookDir;
+
+    float fYaw;
 
     float fTheta = 0.0f;
 
@@ -213,6 +216,47 @@ private:
                 matrix.m[r][c] = m1.m[r][0] * m2.m[0][c] + m1.m[r][1] * m2.m[1][c] + m1.m[r][2] * m2.m[2][c] + m1.m[r][3] * m2.m[3][c];
         return matrix;
     }
+
+    // point at marix for the camera 
+    // paramaters 
+    // position vector were the object should be 
+    // target vector the forword vector for an object 
+    mat4x4 Matrix_PiontAt (vec3d &pos, vec3d &target, vec3d &up)
+    {
+        // Calculate new forward direction 
+        vec3d newForward = Vector_Sub(target, pos);
+        newForward = Vector_Normalise(newForward);
+
+        // Calculate new up direction
+        vec3d a = Vector_Mul(newForward, Vector_DotProduct(up, newForward));
+        vec3d newUp = Vector_Sub(up, a);
+        newUp = Vector_Normalise(newUp);
+
+        // New Right direction is easy, its just cross product
+        vec3d newRight = Vector_CrossProduct(newUp, newForward);
+
+        // Construct Dimensioning and Translation Matrix
+        mat4x4 matrix;
+        matrix.m[0][0] = newRight.x;    matrix.m[0][1] = newRight.y;    matrix.m[0][2] = newRight.z;
+        matrix.m[1][0] = newUp.x;       matrix.m[1][1] = newUp.y;       matrix.m[1][2] = newUp.z;
+        matrix.m[2][0] = newForward.x;  matrix.m[2][1] = newForward.y;  matrix.m[2][2] = newForward.z;
+        matrix.m[3][0] = pos.x;         matrix.m[3][1] = pos.y;         matrix.m[3][2] = pos.z;
+        return matrix;
+    }
+
+    mat4x4 Matrix_QuickInverse(mat4x4& m) // Only for Rotation/Translation Matrices
+    {
+        mat4x4 matrix;
+        matrix.m[0][0] = m.m[0][0]; matrix.m[0][1] = m.m[1][0]; matrix.m[0][2] = m.m[2][0]; matrix.m[0][3] = 0.0f;
+        matrix.m[1][0] = m.m[0][1]; matrix.m[1][1] = m.m[1][1]; matrix.m[1][2] = m.m[2][1]; matrix.m[1][3] = 0.0f;
+        matrix.m[2][0] = m.m[0][2]; matrix.m[2][1] = m.m[1][2]; matrix.m[2][2] = m.m[2][2]; matrix.m[2][3] = 0.0f;
+        matrix.m[3][0] = -(m.m[3][0] * matrix.m[0][0] + m.m[3][1] * matrix.m[1][0] + m.m[3][2] * matrix.m[2][0]);
+        matrix.m[3][1] = -(m.m[3][0] * matrix.m[0][1] + m.m[3][1] * matrix.m[1][1] + m.m[3][2] * matrix.m[2][1]);
+        matrix.m[3][2] = -(m.m[3][0] * matrix.m[0][2] + m.m[3][1] * matrix.m[1][2] + m.m[3][2] * matrix.m[2][2]);
+        matrix.m[3][3] = 1.0f;
+        return matrix;
+    }
+
 
     // utility functions part 3
     // adds two vectors 
@@ -340,15 +384,15 @@ public:
 
         //};
 
-        if (!meshcube.LoadFromObjectFile("teapot.obj"))
+      /*  if (!meshcube.LoadFromObjectFile("teapot.obj"))
         {
             wcout << L"Failed to load VideoShip.obj!" << endl;
             return false;
         }
 
-        wcout << L"VideoShip.obj loaded successfully!" << endl;
+        wcout << L"VideoShip.obj loaded successfully!" << endl;*/
 
-        meshcube.LoadFromObjectFile("teapot.obj");
+        //meshcube.LoadFromObjectFile("teapot.obj");
         // meshcube.LoadFromObjectFile("Ship.obj");
 
         // Projection Matrix manually
@@ -367,6 +411,9 @@ public:
         //matProj.m[2][3] = 1.0f;
         //matProj.m[3][3] = 0.0f;
 
+        // object that represents the axis to help with camera orientation 
+        meshcube.LoadFromObjectFile("axis.obj");
+
          // Projection Matrix 
         matProj = Matrix_MakeProjection(90.0f, (float)ScreenHeight() / (float)ScreenWidth(), 0.1f, 1000.0f);
         return true;
@@ -374,13 +421,42 @@ public:
     bool OnUserUpdate(float fElapsedTime) override
     {
 
+        if(GetKey(VK_UP).bHeld)
+            vCamera.y += 8.0f * fElapsedTime;	// Travel Upwards
+
+        if (GetKey(VK_DOWN).bHeld)
+            vCamera.y -= 8.0f * fElapsedTime;	// Travel Downwards
+
+        // Dont use these two in FPS mode, it is confusing :P
+        if (GetKey(VK_LEFT).bHeld)
+            vCamera.x -= 8.0f * fElapsedTime;	// Travel Along X-Axis
+
+        if (GetKey(VK_RIGHT).bHeld)
+            vCamera.x += 8.0f * fElapsedTime;	// Travel Along X-Axis
+
+        vec3d vForward = Vector_Mul(vLookDir, 8.0f * fElapsedTime);
+
+        // Standard FPS Control scheme, but turn instead of strafe
+        if (GetKey(L'W').bHeld)
+            vCamera = Vector_Add(vCamera, vForward);
+
+        if (GetKey(L'S').bHeld)
+            vCamera = Vector_Sub(vCamera, vForward);
+
+        if (GetKey(L'A').bHeld)
+            fYaw -= 2.0f * fElapsedTime;
+
+        if (GetKey(L'D').bHeld)
+            fYaw += 2.0f * fElapsedTime;
+
         // to clear the screen
         Fill(0,0,ScreenWidth(), ScreenHeight(), PIXEL_SOLID, FG_BLACK);
 
 
         mat4x4 matRotZ, matRotX;
         // to give the impresion that something is rotating we need an angle value that changes over time
-        fTheta += 1.0f * fElapsedTime;
+        // temperoraly removed so the world doesnt spin round while i work on the camera 
+        // fTheta += 1.0f * fElapsedTime;
         
         // hard code 2 rotation matrix
         //rotation matrixs can be looked up on wikepedia
@@ -413,6 +489,20 @@ public:
         matWorld = Matrix_MultiplyMatrix(matRotZ, matRotX); // Transform by rotation
         matWorld = Matrix_MultiplyMatrix(matWorld, matTrans); // Transform by translation
 
+        // vLookDir = { 0, 0, 1 };
+        vec3d vUp = { 0, 1, 0 };
+        // vec3d vTarget = Vector_Add(vCamera, vLookDir);
+        vec3d vTarget = { 0, 0, 1 };
+        mat4x4 matCameraRot = Matrix_MakeRotationY(fYaw);
+        vLookDir = Matrix_MultiplyVector(matCameraRot, vTarget);
+        vTarget = Vector_Add(vCamera, vLookDir);
+
+        mat4x4 matCamera = Matrix_PiontAt(vCamera, vTarget, vUp);
+
+        // marke view matrix from camera 
+        mat4x4  matView = Matrix_QuickInverse(matCamera);
+
+
         vector<triangle> vecTrianglesToRaster;
 
 
@@ -435,7 +525,7 @@ public:
         {
             
             // triangle triprojected, triTranslated, triRotatedZ, triRotatedZX; // were we store the result of out matrix multiplication so as to not upset the original triangle
-            triangle triprojected, triTransformed; // were we store the result of out matrix multiplication so as to not upset the original triangle
+            triangle triprojected, triTransformed, triViewed; // were we store the result of out matrix multiplication so as to not upset the original triangle
 
             ////Rotation
             //// rotate the original triangle in the z axis
@@ -527,10 +617,16 @@ public:
                 triTransformed.sym = c.Char.UnicodeChar;
 
 
+                // Convert World Space --> View Space
+                triViewed.p[0] = Matrix_MultiplyVector(matView, triTransformed.p[0]);
+                triViewed.p[1] = Matrix_MultiplyVector(matView, triTransformed.p[1]);
+                triViewed.p[2] = Matrix_MultiplyVector(matView, triTransformed.p[2]);
+
+
                 // Proejct triangles from 3D ---> 2D
-                triprojected.p[0] = Matrix_MultiplyVector(matProj, triTransformed.p[0]);// we can use the triangle directly and need to refrence the vertex inside
-                triprojected.p[1] = Matrix_MultiplyVector(matProj, triTransformed.p[1]);
-                triprojected.p[2] = Matrix_MultiplyVector(matProj, triTransformed.p[2]);
+                triprojected.p[0] = Matrix_MultiplyVector(matProj, triViewed.p[0]);// we can use the triangle directly and need to refrence the vertex inside
+                triprojected.p[1] = Matrix_MultiplyVector(matProj, triViewed.p[1]);
+                triprojected.p[2] = Matrix_MultiplyVector(matProj, triViewed.p[2]);
                 triprojected.col = triTransformed.col;
                 triprojected.sym = triTransformed.sym;
 
@@ -539,6 +635,14 @@ public:
                 triprojected.p[1] = Vector_Div(triprojected.p[1], triprojected.p[1].w);
                 triprojected.p[2] = Vector_Div(triprojected.p[2], triprojected.p[2].w);
           
+                // X/Y are inverted so put them back
+                triprojected.p[0].x *= -1.0f;
+                triprojected.p[1].x *= -1.0f;
+                triprojected.p[2].x *= -1.0f;
+                triprojected.p[0].y *= -1.0f;
+                triprojected.p[1].y *= -1.0f;
+                triprojected.p[2].y *= -1.0f;
+
 
                 // Offset verts into visible normalised space
                 vec3d vOffsetView = { 1,1,0 };
@@ -558,7 +662,7 @@ public:
                 triprojected.p[2].x += 1.0f;
                 triprojected.p[2].y += 1.0f;*/
 
-                // changedd 0.5f to 0.25f discovered through trail and error 
+                // changed 0.5f to 0.25f discovered through trail and error 
 
                 triprojected.p[0].x *= 0.5f * (float)ScreenWidth();
                 triprojected.p[0].y *= 0.5f * (float)ScreenHeight();
@@ -608,10 +712,10 @@ int main()
     // instance of the class
     olcEngine3D demo;
     // instance of the console
-    //if (demo.ConstructConsole(512, 480, 4, 4))
-    //if (demo.ConstructConsole(256, 240, 4, 4))
-    if (demo.ConstructConsole(128, 120, 4, 4))
-    //if (demo.ConstructConsole(64, 60, 4, 4))
+    // if (demo.ConstructConsole(512, 480, 4, 4))
+    // if (demo.ConstructConsole(256, 240, 4, 4))
+    // if (demo.ConstructConsole(128, 120, 4, 4))
+    if (demo.ConstructConsole(64, 60, 4, 4))
         //if we cn successful construct the console start it 
         demo.Start();
 
